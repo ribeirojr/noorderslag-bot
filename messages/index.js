@@ -191,6 +191,51 @@ var intents = new builder.IntentDialog({ recognizers: [recognizer] })
             }
         }
     ])
+    .matches('getSong', [
+        function (session, args, next)  {
+            var band = builder.EntityRecognizer.findEntity(args.entities, 'band');
+            if (!band) {
+                builder.Prompts.text(session, "What artist/band are you looking for?");
+            } else {
+                next({ response: band.entity });
+            }
+        },
+        function (session, results) {
+            if (! results.response) {
+                session.send('Ok');
+            }
+                // // ... save task
+            var eventData = getArtist(results.response);
+
+            if(!eventData) {
+                session.send('Sorry, I could not find the artist \'%s\'.', result.response);
+                return;
+            }
+            var band = eventData.description;
+
+            request.get({
+                url: 'https://api.spotify.com/v1/search',
+                qs: {
+                    q: band,
+                    type: 'artist,track'
+                }
+            },
+            function (error, response, body) {
+                if (error || response.statusCode != 200) {
+                    session.send('Sorry, there was an error.');
+                }
+                songURL = body.artists.items[0].href;
+                imageURL = body.artists.items[0].images[0].href;
+                var card = new builder.HeroCard(session)
+                    .title(band)
+                    .text(eventData.text)
+                    .images([builder.CardImage.create(session, imageURL)])
+                    .buttons([builder.CardAction.openUrl(session, songURL, 'View more details')]);
+
+                session.send(new builder.Message(session).addAttachment(card));
+            });
+        }
+    ])
     .onDefault((session) => {
         session.send('Sorry, I did not understand \'%s\'.', session.message.text);
     });
